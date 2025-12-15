@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transport Delay Prediction</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --info: #16a085;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: rgba(44, 62, 80, 0.95) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .container {
+            max-width: 900px;
+            margin-top: 30px;
+        }
+        
+        .form-section {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+        
+        .form-control, .form-select {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px 15px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        
+        .input-group-text {
+            background: var(--secondary);
+            color: white;
+            border: none;
+        }
+        
+        .btn-predict {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            width: 100%;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+        
+        .btn-predict:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        
+        .result-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: none;
+            animation: slideIn 0.5s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .result-section.show {
+            display: block;
+        }
+        
+        .result-box {
+            text-align: center;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .delay-value {
+            font-size: 3.5rem;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        
+        .severity-badge {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        
+        .severity-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .severity-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .severity-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .severity-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .severity-dark {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+        
+        .section-title {
+            color: var(--primary);
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid var(--secondary);
+        }
+        
+        .help-text {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--secondary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-bus"></i> Transport Delay Prediction System
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/predict">Predict</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/analysis">Analysis</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about">About</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Prediction Form -->
+        <div class="form-section">
+            <h2 class="section-title">
+                <i class="fas fa-magic"></i> Delay Prediction Tool
+            </h2>
+
+            <form id="predictionForm">
+                <div class="row">
+                    <!-- Time Information -->
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">⏰ Hour (Morning to Night)</label>
+                            <input type="number" class="form-control" id="hour" name="hour" min="0" max="23" value="9">
+                            <div class="help-text">Example: 9 AM or 18 (6 PM) - Range: 0 to 23</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">📅 Month</label>
+                            <input type="number" class="form-control" id="month" name="month" min="1" max="12" value="1">
+                            <div class="help-text">1=January, 12=December</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">📆 Which Day of the Week?</label>
+                            <select class="form-select" id="day_of_week" name="day_of_week">
+                                <option value="0">Monday</option>
+                                <option value="1">Tuesday</option>
+                                <option value="2" selected>Wednesday</option>
+                                <option value="3">Thursday</option>
+                                <option value="4">Friday (Holiday)</option>
+                                <option value="5">Saturday (Holiday)</option>
+                                <option value="6">Sunday</option>
+                            </select>
+                            <div class="help-text">Friday & Saturday are holidays</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">🎉 Is it a Weekend?</label>
+                            <select class="form-select" id="is_weekend" name="is_weekend">
+                                <option value="0" selected>No (Regular Day)</option>
+                                <option value="1">Yes (Friday or Saturday)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weather Information -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">🌤️ Weather (Clear or Rainy?)</label>
+                            <select class="form-select" id="weather_en_encoded" name="weather_en_encoded">
+                                <option value="0" selected>☀️ Clear/Sunny</option>
+                                <option value="1">☁️ Cloudy</option>
+                                <option value="2">🌧️ Rainy</option>
+                                <option value="3">⛈️ Stormy</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">⛈️ Weather Severity</label>
+                            <input type="number" class="form-control" id="weather_severity" name="weather_severity" min="0" max="2" step="0.1" value="0">
+                            <div class="help-text">0=Normal, 2.0=Very Dangerous</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Passenger Information -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">👥 Number of Passengers in Bus</label>
+                            <input type="number" class="form-control" id="passenger_count_final" name="passenger_count_final" min="0" value="50">
+                            <div class="help-text">Example: 50 people, 100 people, etc.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">🚌 Crowding Level</label>
+                            <select class="form-select" id="passenger_level_encoded" name="passenger_level_encoded">
+                                <option value="0" selected>🟢 Comfortable (Few Passengers)</option>
+                                <option value="1">🟡 Moderate (Normal Crowding)</option>
+                                <option value="2">🔴 Very Crowded (Packed!)</option>
+                            </select>
+                            <div class="help-text">How crowded is the bus?</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">⚖️ Load Factor (0 to 3)</label>
+                            <input type="number" class="form-control" id="passenger_load_index" name="passenger_load_index" min="0" step="0.1" value="1">
+                            <div class="help-text">1=Normal, 2=Very Crowded, 3=Packed Tight</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">⏱️ Previous Delay</label>
+                            <input type="number" class="form-control" id="prev_delay" name="prev_delay" min="0" value="0">
+                            <div class="help-text">How many minutes was the last trip delayed? (0 = No delay)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Route Information -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label class="form-label">🚌 Route Frequency</label>
+                            <input type="number" class="form-control" id="route_frequency" name="route_frequency" min="0" value="69">
+                            <div class="help-text">Example: 69 = Bus runs 69 times</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label class="form-label">⚡ Speed (Fast or Slow?)</label>
+                            <input type="number" class="form-control" id="speed_proxy" name="speed_proxy" min="0" max="1" step="0.1" value="0.5">
+                            <div class="help-text">0=Very Slow, 1=Very Fast</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label class="form-label">📏 Distance Changed?</label>
+                            <input type="number" class="form-control" id="distance_change" name="distance_change" step="0.1" value="0">
+                            <div class="help-text">0=Same, Positive=Longer Route</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Other Information -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">🚨 Is it Rush Hour?</label>
+                            <select class="form-select" id="rush_period" name="rush_period">
+                                <option value="0" selected>No (Regular Time)</option>
+                                <option value="1">Yes (Peak Hours - 7-9 AM & 4-6 PM)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">📍 Location: North or South?</label>
+                            <input type="number" class="form-control" id="latitude_clean" name="latitude_clean" step="0.01" value="25.5">
+                            <div class="help-text">Riyadh ≈ 24.7</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-group">
+                            <label class="form-label">📍 Location: East or West?</label>
+                            <input type="number" class="form-control" id="longitude_clean" name="longitude_clean" step="0.01" value="32.0">
+                            <div class="help-text">Riyadh ≈ 46.6</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-predict">
+                    <i class="fas fa-wand-magic-sparkles"></i> Predict Now
+                </button>
+            </form>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div class="result-section" id="resultSection">
+            <h2 class="section-title">
+                <i class="fas fa-chart-bar"></i> Prediction Result
+            </h2>
+
+            <div class="result-box" id="resultBox">
+                <h4>Expected Delay</h4>
+                <div class="delay-value" id="delayValue">-</div>
+                <p>
+                    <span id="delayHours">-</span> hours
+                </p>
+                <div class="severity-badge" id="severityBadge">
+                    <span id="severityIcon">-</span>
+                    <span id="severityText">-</span>
+                </div>
+                <p class="mt-3" style="font-size: 0.95rem; color: #666;">
+                    This prediction is based on the input parameters and the trained model.
+                </p>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #eee;">
+                    <p style="font-size: 0.9rem; color: #666; margin-bottom: 15px;">Share this result:</p>
+                    <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                        <button onclick="shareResult()" class="btn btn-sm btn-outline-primary" style="border-radius: 20px;">
+                            <i class="fas fa-share"></i> Share
+                        </button>
+                        <a href="https://www.facebook.com/sharer/sharer.php?u=http://127.0.0.1:5000/predict" target="_blank" class="btn btn-sm btn-outline-primary" style="border-radius: 20px;">
+                            <i class="fab fa-facebook"></i> Facebook
+                        </a>
+                        <a href="https://twitter.com/intent/tweet?url=http://127.0.0.1:5000/predict&text=Check%20my%20delay%20prediction" target="_blank" class="btn btn-sm btn-outline-primary" style="border-radius: 20px;">
+                            <i class="fab fa-twitter"></i> Twitter
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function shareResult() {
+            const delayValue = document.getElementById('delayValue').textContent;
+            const text = `I just predicted a transport delay: ${delayValue}. Check it out: `;
+            const url = window.location.href;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Transport Delay Prediction',
+                    text: text,
+                    url: url
+                });
+            } else {
+                navigator.clipboard.writeText(text + url);
+                alert('Link copied to clipboard!');
+            }
+        }
+
+        document.getElementById('predictionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            // Collect form data
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('resultSection').classList.remove('show');
+
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Show results
+                    document.getElementById('delayValue').textContent = result.prediction + ' minutes';
+                    document.getElementById('delayHours').textContent = result.prediction_hours;
+                    
+                    const badge = document.getElementById('severityBadge');
+                    badge.className = 'severity-badge severity-' + result.color;
+                    document.getElementById('severityIcon').textContent = result.severity_icon;
+                    document.getElementById('severityText').textContent = result.severity;
+
+                    document.getElementById('resultSection').classList.add('show');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while processing');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

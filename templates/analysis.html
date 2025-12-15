@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --info: #16a085;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: rgba(44, 62, 80, 0.95) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin-top: 30px;
+        }
+        
+        .section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .section-title {
+            color: var(--primary);
+            font-weight: bold;
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid var(--secondary);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 30px;
+        }
+        
+        .scenario-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .scenario-card:hover {
+            transform: translateX(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .scenario-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .scenario-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-bus"></i> Transport Delay Prediction System
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/predict">Predict</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/analysis">Analysis</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about">About</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Scenarios Analysis -->
+        <div class="section">
+            <h2 class="section-title">
+                <i class="fas fa-chart-line"></i> Scenario Analysis
+            </h2>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Loading data...</p>
+            </div>
+
+            <!-- Passengers Scenario -->
+            <div id="scenariosContainer">
+                <h4 class="mt-4">📊 Effect of Passenger Count on Delays</h4>
+                <div class="chart-container">
+                    <canvas id="passengersChart"></canvas>
+                </div>
+
+                <!-- Weather Scenario -->
+                <h4 class="mt-4">🌤️ Effect of Weather on Delays</h4>
+                <div class="chart-container">
+                    <canvas id="weatherChart"></canvas>
+                </div>
+
+                <!-- Hours Scenario -->
+                <h4 class="mt-4">⏰ Effect of Hour on Delays</h4>
+                <div class="chart-container">
+                    <canvas id="hoursChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scenario Cards -->
+        <div class="section">
+            <h2 class="section-title">
+                <i class="fas fa-lightbulb"></i> Insights & Observations
+            </h2>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="scenario-card">
+                        <div class="scenario-label">Highest Impact</div>
+                        <div class="scenario-value" id="highestImpact">-</div>
+                        <p style="margin-top: 10px; font-size: 0.9rem;">
+                            The factor with the most impact on delays
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="scenario-card">
+                        <div class="scenario-label">Lowest Impact</div>
+                        <div class="scenario-value" id="lowestImpact">-</div>
+                        <p style="margin-top: 10px; font-size: 0.9rem;">
+                            The factor with the least impact on delays
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Section -->
+    <div class="container mt-5 mb-5">
+        <div class="section">
+            <h3 style="text-align: center; color: #2c3e50; margin-bottom: 20px;">Share This Analysis</h3>
+            <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                <button onclick="copyToClipboard()" class="btn btn-outline-primary" style="border-radius: 50px; padding: 10px 25px;">
+                    <i class="fas fa-copy"></i> Copy Link
+                </button>
+                <a href="https://www.facebook.com/sharer/sharer.php?u=http://127.0.0.1:5000/analysis" target="_blank" class="btn btn-outline-primary" style="border-radius: 50px; padding: 10px 25px;">
+                    <i class="fab fa-facebook"></i> Facebook
+                </a>
+                <a href="https://twitter.com/intent/tweet?url=http://127.0.0.1:5000/analysis&text=Check%20the%20delay%20analysis" target="_blank" class="btn btn-outline-primary" style="border-radius: 50px; padding: 10px 25px;">
+                    <i class="fab fa-twitter"></i> Twitter
+                </a>
+            </div>
+        </div>
+    </div>
+    <script>
+        let passengersChart, weatherChart, hoursChart;
+
+        // Load Scenario Data
+        fetch('/api/scenarios')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+
+                // Draw Passengers Chart
+                const passengersCtx = document.getElementById('passengersChart').getContext('2d');
+                passengersChart = new Chart(passengersCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.passengers.map(d => d.passengers + ' passengers'),
+                        datasets: [{
+                            label: 'Delay (minutes)',
+                            data: data.passengers.map(d => d.delay),
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 6,
+                            pointBackgroundColor: '#3498db',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { font: { size: 12 } }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { font: { size: 11 } }
+                            },
+                            x: {
+                                ticks: { font: { size: 11 } }
+                            }
+                        }
+                    }
+                });
+
+                // Draw Weather Chart
+                const weatherCtx = document.getElementById('weatherChart').getContext('2d');
+                weatherChart = new Chart(weatherCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.weather.map(d => d.weather),
+                        datasets: [{
+                            label: 'Delay (minutes)',
+                            data: data.weather.map(d => d.delay),
+                            backgroundColor: [
+                                '#27ae60',
+                                '#f39c12',
+                                '#e67e22',
+                                '#e74c3c'
+                            ],
+                            borderRadius: 5,
+                            borderSkipped: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { font: { size: 12 } }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { font: { size: 11 } }
+                            },
+                            x: {
+                                ticks: { font: { size: 11 } }
+                            }
+                        }
+                    }
+                });
+
+                // Draw Hours Chart
+                const hoursCtx = document.getElementById('hoursChart').getContext('2d');
+                hoursChart = new Chart(hoursCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.hours.map(d => d.hour),
+                        datasets: [{
+                            label: 'Delay (minutes)',
+                            data: data.hours.map(d => d.delay),
+                            backgroundColor: '#16a085',
+                            borderRadius: 5,
+                            borderSkipped: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { font: { size: 12 } }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { font: { size: 11 } }
+                            },
+                            x: {
+                                ticks: { font: { size: 11 } }
+                            }
+                        }
+                    }
+                });
+
+                // Calculate Insights
+                const allScenarios = [...data.passengers, ...data.weather, ...data.hours];
+                const maxDelay = Math.max(...allScenarios.map(s => s.delay));
+                const minDelay = Math.min(...allScenarios.map(s => s.delay));
+                
+                const maxScenario = allScenarios.find(s => s.delay === maxDelay);
+                const minScenario = allScenarios.find(s => s.delay === minDelay);
+                
+                document.getElementById('highestImpact').textContent = 
+                    (maxScenario.passengers || maxScenario.weather || maxScenario.hour) + ' (' + maxDelay.toFixed(1) + ' min)';
+                document.getElementById('lowestImpact').textContent = 
+                    (minScenario.passengers || minScenario.weather || minScenario.hour) + ' (' + minDelay.toFixed(1) + ' min)';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('loading').innerHTML = '<p style="color: white; text-align: center;">Error loading data</p>';
+            });
+
+        function copyToClipboard() {
+            const url = window.location.href;
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Link copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        }
+            });
+    </script>
+</body>
+</html>
