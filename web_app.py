@@ -3,7 +3,7 @@
 Web Application for Transport Delay Prediction
 """
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import pickle
 import pandas as pd
 import numpy as np
@@ -13,17 +13,53 @@ import os
 
 app = Flask(__name__)
 app.config['JSON_SUPPORT_360_NANS'] = False
+app.secret_key = 'your-secret-key-here-change-in-production'
 
 # تحميل النموذج
 MODEL_PATH = r'c:\Users\gerge\OneDrive\سطح المكتب\VSCODE\c++\AI\best_delay_model.pkl'
 DATA_PATH = r'c:\Users\gerge\OneDrive\سطح المكتب\VSCODE\c++\AI\dataset_with_features.csv'
 
 def load_model():
-    """تحميل النموذج المدرب"""
-    if os.path.exists(MODEL_PATH):
-        with open(MODEL_PATH, 'rb') as f:
-            return pickle.load(f)
-    return None
+    """تحميل النموذج المدرب وإرجاعه مع اسم وصنف النموذج"""
+    if not os.path.exists(MODEL_PATH):
+        return None, None
+
+    import joblib
+    mdl = None
+    try:
+        # Try joblib first (recommended for sklearn objects)
+        mdl = joblib.load(MODEL_PATH)
+    except Exception:
+        try:
+            with open(MODEL_PATH, 'rb') as f:
+                mdl = pickle.load(f)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load model using joblib or pickle: {e}") from e
+
+    # محاولة استنتاج اسم النموذج
+    model_name = None
+    try:
+        # إذا كان Pipeline
+        if hasattr(mdl, 'named_steps') and 'model' in mdl.named_steps:
+            cls_name = type(mdl.named_steps['model']).__name__
+            if 'GradientBoost' in cls_name:
+                model_name = 'Gradient Boosting'
+            elif 'RandomForest' in cls_name:
+                model_name = 'Random Forest'
+            elif 'Ridge' in cls_name:
+                model_name = 'Ridge Regression'
+            elif 'Linear' in cls_name:
+                model_name = 'Linear Regression'
+            else:
+                model_name = cls_name
+        else:
+            # مباشر
+            cls_name = type(mdl).__name__
+            model_name = cls_name
+    except Exception:
+        model_name = None
+
+    return mdl, model_name
 
 def load_data():
     """تحميل البيانات للإحصائيات"""
@@ -33,27 +69,74 @@ def load_data():
         return None
 
 # تحميل النموذج والبيانات عند بدء التطبيق
-model = load_model()
+model, model_name = load_model()
 data = load_data()
+
+def load_users():
+    """تحميل بيانات المستخدمين من ملف JSON"""
+    try:
+        with open('AI/users.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return []
+
+users = load_users()
+
+def login_required(f):
+    """ديكوراتور للتحقق من تسجيل الدخول"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ==================== الصفحات ====================
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """صفحة تسجيل الدخول"""
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        # التحقق من بيانات المستخدم
+        for user in users:
+            if user['email'] == email and user['password'] == password:
+                session['user'] = email
+                return redirect(url_for('home'))
+
+        return render_template('login.html', error='بيانات الدخول غير صحيحة')
+
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """تسجيل الخروج"""
+    session.pop('user', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def home():
     """الصفحة الرئيسية"""
     return render_template('index.html')
 
 @app.route('/predict')
+@login_required
 def predict_page():
     """صفحة التنبؤ"""
     return render_template('predict.html')
 
 @app.route('/analysis')
+@login_required
 def analysis_page():
     """صفحة تحليل البيانات"""
     return render_template('analysis.html')
 
 @app.route('/about')
+@login_required
 def about_page():
     """صفحة حول التطبيق"""
     return render_template('about.html')
@@ -70,13 +153,9 @@ def api_predict():
         data_json = request.json
         
         # تحويل البيانات
+        # جمع المزايا من الطلب
         features_dict = {
             'hour': int(data_json.get('hour', 9)),
-            'day_of_week': int(data_json.get('day_of_week', 2)),
-            'month': int(data_json.get('month', 1)),
-            'is_weekend': int(data_json.get('is_weekend', 0)),
-            'day_period_encoded': int(data_json.get('day_period_encoded', 0)),
-            'time_category_en_encoded': int(data_json.get('time_category_en_encoded', 0)),
             'passenger_count_final': float(data_json.get('passenger_count_final', 50)),
             'passenger_load_index': float(data_json.get('passenger_load_index', 1.0)),
             'prev_delay': float(data_json.get('prev_delay', 0)),
@@ -87,9 +166,32 @@ def api_predict():
             'distance_change': float(data_json.get('distance_change', 0.0)),
             'latitude_clean': float(data_json.get('latitude_clean', 25.5)),
             'longitude_clean': float(data_json.get('longitude_clean', 32.0)),
-            'weather_en_encoded': int(data_json.get('weather_en_encoded', 0)),
-            'passenger_level_encoded': int(data_json.get('passenger_level_encoded', 0)),
         }
+
+        # بعض النماذج تحتاج أعمدة تصنيفية بأسماء محددة؛ إذا استلمنا قيماً مشفرة، نحولها لسلاسل ليتعامل OneHotEncoder معها
+        # day_period / time_category_en / weather_en / passenger_level / route_id
+        if 'day_period' in data_json and data_json.get('day_period'):
+            features_dict['day_period'] = str(data_json.get('day_period'))
+        elif 'day_period_encoded' in data_json:
+            features_dict['day_period'] = f"dp_{int(data_json.get('day_period_encoded'))}"
+
+        if 'time_category_en' in data_json and data_json.get('time_category_en'):
+            features_dict['time_category_en'] = str(data_json.get('time_category_en'))
+        elif 'time_category_en_encoded' in data_json:
+            features_dict['time_category_en'] = f"tc_{int(data_json.get('time_category_en_encoded'))}"
+
+        if 'weather_en' in data_json and data_json.get('weather_en'):
+            features_dict['weather_en'] = str(data_json.get('weather_en'))
+        elif 'weather_en_encoded' in data_json:
+            features_dict['weather_en'] = f"w_{int(data_json.get('weather_en_encoded'))}"
+
+        if 'passenger_level' in data_json and data_json.get('passenger_level'):
+            features_dict['passenger_level'] = str(data_json.get('passenger_level'))
+        elif 'passenger_level_encoded' in data_json:
+            features_dict['passenger_level'] = f"pl_{int(data_json.get('passenger_level_encoded'))}"
+
+        # route_id (اختياري)
+        features_dict['route_id'] = data_json.get('route_id', 'UNKNOWN')
         
         # التنبؤ
         df = pd.DataFrame([features_dict])
@@ -123,11 +225,36 @@ def api_predict():
             'prediction_hours': round(prediction / 60, 2),
             'severity': severity,
             'severity_icon': severity_icon,
-            'color': color
+            'color': color,
+            'model_used': model_name or 'unknown'
         })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+@app.route('/api/model')
+def api_model():
+    """معلومات عن النموذج المستخدم"""
+    if model is None:
+        return jsonify({'model': None}), 200
+    # حاول قراءة ملخص النتائج إن وجد
+    meta = {}
+    try:
+        import json
+        with open('model_results.json', 'r', encoding='utf-8') as f:
+            results = json.load(f)
+            # حاول العثور على مفتاح يطابق model_name
+            found_key = None
+            for k in results.keys():
+                if model_name and model_name.replace(' ', '').lower() in k.replace(' ', '').lower():
+                    found_key = k
+                    break
+            if found_key:
+                meta = results[found_key]
+    except Exception:
+        meta = {}
+    return jsonify({'model': model_name or 'unknown', 'metrics': meta}), 200
+
 
 @app.route('/api/statistics')
 def api_statistics():
